@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
     
     def check_ready(self):
         """检查是否可以开始分析"""
-        ready = self.ifc_path and self.las_path
+        ready = bool(self.ifc_path and self.las_path)
         self.btn_analyze.setEnabled(ready)
         if ready:
             self.status_label.setText("✅ 已选择文件，可以开始分析")
