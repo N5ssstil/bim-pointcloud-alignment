@@ -35,6 +35,10 @@ python run_app.py
 python main_pyqt.py
 ```
 
+### 方案3：Windows 用户
+
+详见 **[Windows 运行指南](docs/WINDOWS_GUIDE.md)**
+
 ---
 
 ## 📁 项目结构
