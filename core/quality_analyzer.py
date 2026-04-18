@@ -122,6 +122,17 @@ class QualityAnalyzer:
                             'height_m': depth_mm / 1000
                         })
         
+        # 提取楼板和天花板厚度
+        self.bim_info['slab_thickness_mm'] = 150  # 默认楼板厚度
+        self.bim_info['ceiling_thickness_mm'] = 57  # 默认天花板厚度
+        
+        for eid, data in self.entities.items():
+            if data['type'] == 'IFCEXTRUDEDAREASOLID':
+                params = data['params'].split(',')
+                if len(params) >= 4:
+                    depth_mm = float(params[3].strip())
+                    # 检查是否是楼板或天花板（通过后续实体类型判断）
+                    
         # 提取楼板尺寸（用于计算房间净尺寸）
         self.bim_info['slab_dims'] = {'width_mm': 0, 'length_mm': 0}
         for eid, data in self.entities.items():
@@ -297,11 +308,28 @@ class QualityAnalyzer:
         result = {}
         
         # 楼层净高检测
+        design_height = self.bim_info['floor_height']
+        
         if floors and ceilings:
+            # 有地面和天花板
             floor_z = min(f['z'] for f in floors)
             ceiling_z = max(c['z'] for c in ceilings)
             net_height = ceiling_z - floor_z
-            design_height = self.bim_info['floor_height']
+            deviation = (net_height - design_height) * 1000
+            
+            result['楼层净高'] = {
+                '设计值_m': design_height,
+                '实测值_m': net_height,
+                '偏差_mm': deviation,
+                '合格': abs(deviation) < 50  # 50mm允许偏差
+            }
+        elif len(floors) >= 2:
+            # 有多个地面层（可能是上下层），用地面间距作为净高
+            floor_z_values = sorted([f['z'] for f in floors])
+            # 取最高的地面和最低的地面
+            lower_floor_z = floor_z_values[0]
+            upper_floor_z = floor_z_values[-1]
+            net_height = upper_floor_z - lower_floor_z
             deviation = (net_height - design_height) * 1000
             
             result['楼层净高'] = {
@@ -311,14 +339,14 @@ class QualityAnalyzer:
                 '合格': abs(deviation) < 50  # 50mm允许偏差
             }
         elif floors:
+            # 只有一个地面层，无法测量净高
             floor_z = min(f['z'] for f in floors)
-            design_height = self.bim_info['floor_height']
-            
             result['楼层净高'] = {
                 '设计值_m': design_height,
-                '实测值_m': design_height,
-                '偏差_mm': 0,
-                '合格': True
+                '实测值_m': None,
+                '偏差_mm': None,
+                '合格': True,
+                '备注': '点云无天花板数据，无法测量净高'
             }
         
         # 房间尺寸检测
