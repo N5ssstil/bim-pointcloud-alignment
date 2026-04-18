@@ -90,6 +90,7 @@ class QualityAnalyzer:
                     points[eid] = coords
         
         # 提取墙体拉伸实体
+        wall_thicknesses = []
         for eid, data in self.entities.items():
             if data['type'] == 'IFCEXTRUDEDAREASOLID':
                 params = data['params'].split(',')
@@ -108,15 +109,45 @@ class QualityAnalyzer:
                     width_mm = float(pp[3].strip()) if len(pp) > 3 else 0
                     thickness_mm = float(pp[4].strip()) if len(pp) > 4 else 0
                     
-                    self.bim_info['walls'].append({
-                        'id': eid,
-                        'length_mm': width_mm,
-                        'thickness_mm': thickness_mm,
-                        'height_mm': depth_mm,
-                        'length_m': width_mm / 1000,
-                        'thickness_m': thickness_mm / 1000,
-                        'height_m': depth_mm / 1000
-                    })
+                    # 只记录真正的墙体（厚度小于500mm）
+                    if thickness_mm < 500:
+                        wall_thicknesses.append(thickness_mm)
+                        self.bim_info['walls'].append({
+                            'id': eid,
+                            'length_mm': width_mm,
+                            'thickness_mm': thickness_mm,
+                            'height_mm': depth_mm,
+                            'length_m': width_mm / 1000,
+                            'thickness_m': thickness_mm / 1000,
+                            'height_m': depth_mm / 1000
+                        })
+        
+        # 提取楼板尺寸（用于计算房间净尺寸）
+        self.bim_info['slab_dims'] = {'width_mm': 0, 'length_mm': 0}
+        for eid, data in self.entities.items():
+            if data['type'] == 'IFCRECTANGLEPROFILEDEF':
+                params = data['params'].split(',')
+                try:
+                    dim1 = float(params[-2].strip()) if len(params) >= 3 else 0
+                    dim2 = float(params[-1].strip()) if len(params) >= 4 else 0
+                    # 楼板尺寸较大（大于4000mm），且两个方向都较大
+                    if dim1 > 4000 and dim2 > 4000:
+                        self.bim_info['slab_dims']['width_mm'] = min(dim1, dim2)
+                        self.bim_info['slab_dims']['length_mm'] = max(dim1, dim2)
+                        break  # 只取第一个楼板
+                except:
+                    pass
+        
+        # 计算净尺寸（扣除墙厚）
+        # 使用标准墙厚（取最小值，因为房间两侧通常是标准墙）
+        standard_wall_thickness = min(wall_thicknesses) if wall_thicknesses else 120
+        self.bim_info['room_net_dims'] = {
+            '开间_mm': self.bim_info['slab_dims']['width_mm'] - 2 * standard_wall_thickness,
+            '进深_mm': self.bim_info['slab_dims']['length_mm'] - 2 * standard_wall_thickness,
+            '开间_m': (self.bim_info['slab_dims']['width_mm'] - 2 * standard_wall_thickness) / 1000,
+            '进深_m': (self.bim_info['slab_dims']['length_mm'] - 2 * standard_wall_thickness) / 1000
+        }
+        self.bim_info['standard_wall_thickness_mm'] = standard_wall_thickness
     
     def _extract_floor_height(self):
         """提取楼层高度"""
@@ -303,11 +334,15 @@ class QualityAnalyzer:
             y_coords = [c[1] for c in wall_centroids]
             depth_measured = max(y_coords) - min(y_coords)
             
-            # 设计尺寸（从BIM提取）
+            # 设计尺寸（从BIM提取净尺寸）
             design_width = 4.0  # 默认
             design_depth = 5.0  # 默认
             
-            if self.bim_info['walls']:
+            # 使用扣除墙厚的净尺寸
+            if 'room_net_dims' in self.bim_info:
+                design_width = self.bim_info['room_net_dims']['开间_m']
+                design_depth = self.bim_info['room_net_dims']['进深_m']
+            elif self.bim_info['walls']:
                 lengths = [w['length_m'] for w in self.bim_info['walls']]
                 design_width = max(lengths)
                 if len(lengths) > 1:
