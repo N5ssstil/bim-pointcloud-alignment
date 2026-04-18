@@ -427,8 +427,14 @@ class MainWindow(QMainWindow):
             self.result_table.insertRow(row)
             self.result_table.setItem(row, 0, QTableWidgetItem("楼层净高"))
             self.result_table.setItem(row, 1, QTableWidgetItem(f"{h['设计值_m']:.2f}m"))
-            self.result_table.setItem(row, 2, QTableWidgetItem(f"{h['实测值_m']:.2f}m"))
-            self.result_table.setItem(row, 3, QTableWidgetItem(f"{h['偏差_mm']:.1f}mm"))
+            
+            if h['实测值_m'] is not None:
+                self.result_table.setItem(row, 2, QTableWidgetItem(f"{h['实测值_m']:.2f}m"))
+                self.result_table.setItem(row, 3, QTableWidgetItem(f"{h['偏差_mm']:.1f}mm"))
+            else:
+                self.result_table.setItem(row, 2, QTableWidgetItem("无法测量"))
+                self.result_table.setItem(row, 3, QTableWidgetItem(h.get('备注', '-') if h.get('备注') else '-'))
+            
             status_item = QTableWidgetItem("合格" if h['合格'] else "不合格")
             status_item.setBackground(QColor("#90EE90" if h['合格'] else "#FFB6C1"))
             self.result_table.setItem(row, 4, status_item)
@@ -441,8 +447,14 @@ class MainWindow(QMainWindow):
             self.result_table.insertRow(row)
             self.result_table.setItem(row, 0, QTableWidgetItem("开间"))
             self.result_table.setItem(row, 1, QTableWidgetItem(f"{d['开间设计_m']:.2f}m"))
-            self.result_table.setItem(row, 2, QTableWidgetItem(f"{d['开间实测_m']:.2f}m"))
-            self.result_table.setItem(row, 3, QTableWidgetItem(f"{d['开间偏差_mm']:.1f}mm"))
+            
+            if d['开间实测_m'] is not None:
+                self.result_table.setItem(row, 2, QTableWidgetItem(f"{d['开间实测_m']:.2f}m"))
+                self.result_table.setItem(row, 3, QTableWidgetItem(f"{d['开间偏差_mm']:.1f}mm"))
+            else:
+                self.result_table.setItem(row, 2, QTableWidgetItem("无法测量"))
+                self.result_table.setItem(row, 3, QTableWidgetItem("-"))
+            
             status_item = QTableWidgetItem("合格" if d['合格'] else "不合格")
             status_item.setBackground(QColor("#90EE90" if d['合格'] else "#FFB6C1"))
             self.result_table.setItem(row, 4, status_item)
@@ -452,8 +464,14 @@ class MainWindow(QMainWindow):
             self.result_table.insertRow(row)
             self.result_table.setItem(row, 0, QTableWidgetItem("进深"))
             self.result_table.setItem(row, 1, QTableWidgetItem(f"{d['进深设计_m']:.2f}m"))
-            self.result_table.setItem(row, 2, QTableWidgetItem(f"{d['进深实测_m']:.2f}m"))
-            self.result_table.setItem(row, 3, QTableWidgetItem(f"{d['进深偏差_mm']:.1f}mm"))
+            
+            if d['进深实测_m'] is not None:
+                self.result_table.setItem(row, 2, QTableWidgetItem(f"{d['进深实测_m']:.2f}m"))
+                self.result_table.setItem(row, 3, QTableWidgetItem(f"{d['进深偏差_mm']:.1f}mm"))
+            else:
+                self.result_table.setItem(row, 2, QTableWidgetItem("无法测量"))
+                self.result_table.setItem(row, 3, QTableWidgetItem("-"))
+            
             status_item = QTableWidgetItem("合格" if d['合格'] else "不合格")
             status_item.setBackground(QColor("#90EE90" if d['合格'] else "#FFB6C1"))
             self.result_table.setItem(row, 4, status_item)
