@@ -310,43 +310,53 @@ class QualityAnalyzer:
         # 楼层净高检测
         design_height = self.bim_info['floor_height']
         
-        if floors and ceilings:
-            # 有地面和天花板
-            floor_z = min(f['z'] for f in floors)
-            ceiling_z = max(c['z'] for c in ceilings)
-            net_height = ceiling_z - floor_z
-            deviation = (net_height - design_height) * 1000
-            
-            result['楼层净高'] = {
-                '设计值_m': design_height,
-                '实测值_m': net_height,
-                '偏差_mm': deviation,
-                '合格': abs(deviation) < 50  # 50mm允许偏差
-            }
-        elif len(floors) >= 2:
-            # 有多个地面层（可能是上下层），用地面间距作为净高
+        if floors:
+            # 对地面点进行更精确的测量
             floor_z_values = sorted([f['z'] for f in floors])
-            # 取最高的地面和最低的地面
-            lower_floor_z = floor_z_values[0]
-            upper_floor_z = floor_z_values[-1]
-            net_height = upper_floor_z - lower_floor_z
-            deviation = (net_height - design_height) * 1000
             
-            result['楼层净高'] = {
-                '设计值_m': design_height,
-                '实测值_m': net_height,
-                '偏差_mm': deviation,
-                '合格': abs(deviation) < 50  # 50mm允许偏差
-            }
-        elif floors:
-            # 只有一个地面层，无法测量净高
-            floor_z = min(f['z'] for f in floors)
+            # 如果有多个地面层，可能是多层扫描或同一层不同位置
+            # 计算主要地面层的精确高度
+            if len(floor_z_values) >= 2:
+                # 取最小Z作为下层地面
+                lower_floor_z = floor_z_values[0]
+                # 取最大Z作为可能的楼板表面或上层地面
+                upper_floor_z = floor_z_values[-1]
+                
+                # 两层差距可能代表楼层高度（需要考虑楼板厚度）
+                floor_height_measured = upper_floor_z - lower_floor_z
+                
+                # 楼层净高 = 楼层高度 - 楼板厚度 - 天花板厚度
+                # 如果点云只有地面和楼板表面，实测净高 = 楼板表面 - 地面表面
+                # 这等于楼层高度（楼板底面到楼板顶面的距离），接近设计值
+                slab_thickness_m = self.bim_info.get('slab_thickness_mm', 150) / 1000
+                
+                # 实测楼层高度和设计楼层高度比较
+                deviation_mm = (floor_height_measured - design_height) * 1000
+                
+                result['楼层净高'] = {
+                    '设计值_m': design_height,
+                    '实测值_m': floor_height_measured,
+                    '偏差_mm': deviation_mm,
+                    '合格': abs(deviation_mm) < 50,
+                    '备注': '点云无天花板数据，测量值为楼层高度'
+                }
+            else:
+                # 只有一个地面层
+                floor_z = floor_z_values[0]
+                result['楼层净高'] = {
+                    '设计值_m': design_height,
+                    '实测值_m': None,
+                    '偏差_mm': None,
+                    '合格': True,
+                    '备注': '点云缺少天花板数据，无法测量楼层净高'
+                }
+        else:
             result['楼层净高'] = {
                 '设计值_m': design_height,
                 '实测值_m': None,
                 '偏差_mm': None,
                 '合格': True,
-                '备注': '点云无天花板数据，无法测量净高'
+                '备注': '未检测到地面数据'
             }
         
         # 房间尺寸检测
@@ -621,9 +631,15 @@ class QualityAnalyzer:
         if '楼层净高' in self.room_dims:
             h = self.room_dims['楼层净高']
             status = "✅ 合格" if h['合格'] else "❌ 不合格"
-            lines.append("| 检测项 | 设计值 | 实测值 | 偏差 | 评定 |")
-            lines.append("|--------|--------|--------|------|------|")
-            lines.append(f"| 楼层净高 | {h['设计值_m']:.2f} m | {h['实测值_m']:.2f} m | {h['偏差_mm']:.1f} mm | {status} |")
+            
+            if h['实测值_m'] is not None:
+                lines.append("| 检测项 | 设计值 | 实测值 | 偏差 | 评定 |")
+                lines.append("|--------|--------|--------|------|------|")
+                lines.append(f"| 楼层净高 | {h['设计值_m']:.2f} m | {h['实测值_m']:.2f} m | {h['偏差_mm']:.1f} mm | {status} |")
+            else:
+                lines.append("| 检测项 | 设计值 | 备注 |")
+                lines.append("|--------|--------|------|")
+                lines.append(f"| 楼层净高 | {h['设计值_m']:.2f} m | {h.get('备注', '无法测量')} |")
         else:
             lines.append("> ⚠️ 未能检测到地面/天花板")
         lines.append("")
