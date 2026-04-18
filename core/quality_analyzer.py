@@ -57,8 +57,11 @@ class QualityAnalyzer:
     
     def _parse_ifc(self):
         """解析IFC文件"""
-        with open(self.ifc_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
+        try:
+            with open(self.ifc_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except Exception as e:
+            raise RuntimeError(f"无法读取IFC文件: {e}")
         
         # 提取所有实体
         for match in re.finditer(r'#(\d+)\s*=\s*(\w+)\s*\(([^;]*?)\);', content, re.DOTALL):

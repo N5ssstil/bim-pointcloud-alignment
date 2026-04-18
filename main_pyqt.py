@@ -6,6 +6,7 @@ BIM-点云施工质量检测系统 - PyQt5版本
 
 import sys
 import os
+import traceback
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -24,9 +25,10 @@ try:
     from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
     from PyQt5.QtGui import QFont, QColor, QIcon, QPalette
     HAS_PYQT = True
-except ImportError:
+except ImportError as e:
     HAS_PYQT = False
-    print("警告: PyQt5未安装，请运行: pip install PyQt5")
+    print(f"警告: PyQt5未安装，请运行: pip install PyQt5")
+    print(f"错误详情: {e}")
 
 # 导入核心分析模块
 sys.path.insert(0, str(Path(__file__).parent))
@@ -326,29 +328,35 @@ class MainWindow(QMainWindow):
     
     def select_ifc(self):
         """选择IFC文件"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择BIM模型文件", "",
-            "IFC文件 (*.ifc);;所有文件 (*.*)"
-        )
-        
-        if file_path:
-            self.ifc_path = file_path
-            self.ifc_label.setText(Path(file_path).name)
-            self.ifc_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            self.check_ready()
+        try:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "选择BIM模型文件", "",
+                "IFC文件 (*.ifc);;所有文件 (*.*)"
+            )
+            
+            if file_path:
+                self.ifc_path = file_path
+                self.ifc_label.setText(Path(file_path).name)
+                self.ifc_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                self.check_ready()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"选择文件时出错: {e}\n{traceback.format_exc()}")
     
     def select_las(self):
         """选择LAS文件"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择点云文件", "",
-            "LAS文件 (*.las *.laz);;所有文件 (*.*)"
-        )
-        
-        if file_path:
-            self.las_path = file_path
-            self.las_label.setText(Path(file_path).name)
-            self.las_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            self.check_ready()
+        try:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "选择点云文件", "",
+                "LAS文件 (*.las *.laz);;所有文件 (*.*)"
+            )
+            
+            if file_path:
+                self.las_path = file_path
+                self.las_label.setText(Path(file_path).name)
+                self.las_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                self.check_ready()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"选择文件时出错: {e}\n{traceback.format_exc()}")
     
     def check_ready(self):
         """检查是否可以开始分析"""
@@ -531,13 +539,27 @@ def main():
         print("或使用tkinter版本: python main_tk.py")
         return
     
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')
+    try:
+        # 导入核心模块
+        sys.path.insert(0, str(Path(__file__).parent))
+        from core.quality_analyzer import QualityAnalyzer
+        print("核心模块导入成功")
+    except Exception as e:
+        print(f"导入核心模块失败: {e}")
+        print(traceback.format_exc())
+        return
     
-    window = MainWindow()
-    window.show()
-    
-    sys.exit(app.exec_())
+    try:
+        app = QApplication(sys.argv)
+        app.setStyle('Fusion')
+        
+        window = MainWindow()
+        window.show()
+        
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(f"程序启动失败: {e}")
+        print(traceback.format_exc())
 
 
 if __name__ == "__main__":
