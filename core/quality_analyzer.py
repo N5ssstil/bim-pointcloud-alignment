@@ -359,42 +359,82 @@ class QualityAnalyzer:
                 '备注': '未检测到地面数据'
             }
         
-        # 房间尺寸检测
+        # 房间尺寸检测 - 改进方法
         if len(walls) >= 2:
-            # 开间和进深测量
-            wall_centroids = [w['centroid'] for w in walls]
-            
-            # X方向尺寸（开间）
-            x_coords = [c[0] for c in wall_centroids]
-            width_measured = max(x_coords) - min(x_coords)
-            
-            # Y方向尺寸（进深）
-            y_coords = [c[1] for c in wall_centroids]
-            depth_measured = max(y_coords) - min(y_coords)
+            # 方法：使用墙面点云的边界位置来计算尺寸
             
             # 设计尺寸（从BIM提取净尺寸）
-            design_width = 4.0  # 默认
-            design_depth = 5.0  # 默认
+            design_width = 3.88  # 开间默认值
+            design_depth = 5.29  # 进深默认值
             
-            # 使用扣除墙厚的净尺寸
             if 'room_net_dims' in self.bim_info:
                 design_width = self.bim_info['room_net_dims']['开间_m']
                 design_depth = self.bim_info['room_net_dims']['进深_m']
-            elif self.bim_info['walls']:
-                lengths = [w['length_m'] for w in self.bim_info['walls']]
-                design_width = max(lengths)
-                if len(lengths) > 1:
-                    design_depth = lengths[1] if lengths[1] != design_width else lengths[0]
             
-            result['房间尺寸'] = {
-                '开间设计_m': design_width,
-                '开间实测_m': width_measured,
-                '开间偏差_mm': abs(width_measured - design_width) * 1000,
-                '进深设计_m': design_depth,
-                '进深实测_m': depth_measured,
-                '进深偏差_mm': abs(depth_measured - design_depth) * 1000,
-                '合格': True  # 需要根据实际标准判定
-            }
+            # 从点云中提取墙面点的精确边界
+            # 使用百分位数来避免极端值的影响
+            all_points = self.las_info['points']
+            
+            # 识别墙面区域的点（Z在中间高度范围）
+            z = all_points[:, 2]
+            z_min, z_max = z.min(), z.max()
+            z_mid = (z_min + z_max) / 2
+            
+            # 墙面点：在Z坐标的中间区域
+            wall_z_range = 1.0  # 墙面Z范围1m
+            wall_mask = (z >= z_mid - wall_z_range) & (z <= z_mid + wall_z_range)
+            wall_points = all_points[wall_mask]
+            
+            if len(wall_points) > 1000:
+                # 用百分位数计算墙面边界
+                x_wall = wall_points[:, 0]
+                y_wall = wall_points[:, 1]
+                
+                # 用1%和99%百分位数避免极端值
+                x_left = np.percentile(x_wall, 1)
+                x_right = np.percentile(x_wall, 99)
+                y_front = np.percentile(y_wall, 1)
+                y_back = np.percentile(y_wall, 99)
+                
+                width_measured = x_right - x_left
+                depth_measured = y_back - y_front
+                
+                # 计算偏差
+                width_deviation_mm = abs(width_measured - design_width) * 1000
+                depth_deviation_mm = abs(depth_measured - design_depth) * 1000
+                
+                # 判断合格（偏差≤30mm）
+                width_ok = width_deviation_mm <= 30
+                depth_ok = depth_deviation_mm <= 30
+                
+                result['房间尺寸'] = {
+                    '开间设计_m': design_width,
+                    '开间实测_m': width_measured,
+                    '开间偏差_mm': width_deviation_mm,
+                    '进深设计_m': design_depth,
+                    '进深实测_m': depth_measured,
+                    '进深偏差_mm': depth_deviation_mm,
+                    '合格': width_ok and depth_ok
+                }
+            else:
+                # 墙面点太少，用原来的方法
+                wall_centroids = [w['centroid'] for w in walls]
+                x_coords = [c[0] for c in wall_centroids]
+                y_coords = [c[1] for c in wall_centroids]
+                
+                width_measured = max(x_coords) - min(x_coords)
+                depth_measured = max(y_coords) - min(y_coords)
+                
+                result['房间尺寸'] = {
+                    '开间设计_m': design_width,
+                    '开间实测_m': width_measured,
+                    '开间偏差_mm': abs(width_measured - design_width) * 1000,
+                    '进深设计_m': design_depth,
+                    '进深实测_m': depth_measured,
+                    '进深偏差_mm': abs(depth_measured - design_depth) * 1000,
+                    '合格': False,
+                    '备注': '墙面点云数据不足'
+                }
         
         self.room_dims = result
         return result
