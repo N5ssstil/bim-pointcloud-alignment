@@ -504,16 +504,58 @@ class MainWindow(QMainWindow):
         if not self.analysis_result:
             return
         
+        # 选择保存格式
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "保存报告", f"施工质量检测报告_{datetime.now().strftime('%Y%m%d')}.txt",
-            "文本文件 (*.txt);;PDF文件 (*.pdf);;所有文件 (*.*)"
+            self, "保存报告", f"施工质量检测报告_{datetime.now().strftime('%Y%m%d')}",
+            "Markdown文件 (*.md);;文本文件 (*.txt);;所有文件 (*.*)"
         )
         
         if file_path:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(self.analysis_result['report'])
-            
-            QMessageBox.information(self, "导出成功", f"报告已保存至:\n{file_path}")
+            try:
+                # 根据文件扩展名选择格式
+                if file_path.endswith('.md'):
+                    # 生成 Markdown 格式报告
+                    from core.quality_analyzer import QualityAnalyzer
+                    analyzer = QualityAnalyzer(self.ifc_path, self.las_path)
+                    analyzer.load_data()
+                    analyzer.detect_planes()
+                    analyzer.measure_room()
+                    analyzer.analyze_walls()
+                    report_content = analyzer.generate_markdown_report()
+                else:
+                    # 默认使用 txt 格式
+                    report_content = self.analysis_result['report']
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(report_content)
+                
+                # 同时生成另一种格式的报告
+                base_path = Path(file_path).stem
+                parent_dir = Path(file_path).parent
+                
+                if file_path.endswith('.md'):
+                    # 同时保存 txt
+                    txt_path = parent_dir / f"{base_path}.txt"
+                    with open(txt_path, 'w', encoding='utf-8') as f:
+                        f.write(self.analysis_result['report'])
+                    QMessageBox.information(self, "导出成功", 
+                        f"报告已保存:\n\n📄 Markdown: {file_path}\n📄 文本: {txt_path}")
+                else:
+                    # 同时保存 md
+                    md_path = parent_dir / f"{base_path}.md"
+                    from core.quality_analyzer import QualityAnalyzer
+                    analyzer = QualityAnalyzer(self.ifc_path, self.las_path)
+                    analyzer.load_data()
+                    analyzer.detect_planes()
+                    analyzer.measure_room()
+                    analyzer.analyze_walls()
+                    md_content = analyzer.generate_markdown_report()
+                    with open(md_path, 'w', encoding='utf-8') as f:
+                        f.write(md_content)
+                    QMessageBox.information(self, "导出成功", 
+                        f"报告已保存:\n\n📄 文本: {file_path}\n📄 Markdown: {md_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "导出失败", f"保存报告时出错: {e}")
     
     def show_about(self):
         """显示关于对话框"""

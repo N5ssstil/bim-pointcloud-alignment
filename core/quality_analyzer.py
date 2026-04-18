@@ -504,6 +504,161 @@ class QualityAnalyzer:
         
         return '\n'.join(lines)
     
+    def generate_markdown_report(self) -> str:
+        """生成Markdown格式的检测报告"""
+        if not self.room_dims:
+            self.measure_room()
+        
+        if not self.wall_quality:
+            self.analyze_walls()
+        
+        lines = []
+        
+        # 标题
+        lines.append("# 房屋施工质量检测报告")
+        lines.append("")
+        lines.append(f"> 报告编号: QC-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        lines.append(f"> 检测日期: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("")
+        
+        # 基本信息
+        lines.append("## 一、基本信息")
+        lines.append("")
+        lines.append("| 项目 | 内容 |")
+        lines.append("|------|------|")
+        lines.append(f"| BIM文件 | {Path(self.ifc_path).name} |")
+        lines.append(f"| 点云文件 | {Path(self.las_path).name} |")
+        lines.append(f"| 楼层设计高度 | {self.bim_info['floor_height']:.2f} m |")
+        lines.append(f"| 墙体数量 | {len(self.bim_info['walls'])} |")
+        lines.append("")
+        
+        # 点云信息
+        lines.append("## 二、实测数据信息")
+        lines.append("")
+        bbox = self.las_info['bbox']
+        lines.append(f"- **点云点数**: {self.las_info['n_points']:,}")
+        lines.append(f"- **检测平面数**: {len(self.planes)}")
+        floors = len([p for p in self.planes if p['type'] == 'floor'])
+        ceilings = len([p for p in self.planes if p['type'] == 'ceiling'])
+        walls = len([p for p in self.planes if p['type'] == 'wall'])
+        lines.append(f"  - 地面: {floors}个, 天花板: {ceilings}个, 墙面: {walls}个")
+        lines.append("")
+        lines.append("**测量范围:**")
+        lines.append("")
+        lines.append("| 方向 | 最小值 | 最大值 |")
+        lines.append("|------|--------|--------|")
+        lines.append(f"| X | {bbox['min'][0]:.2f} | {bbox['max'][0]:.2f} |")
+        lines.append(f"| Y | {bbox['min'][1]:.2f} | {bbox['max'][1]:.2f} |")
+        lines.append(f"| Z | {bbox['min'][2]:.2f} | {bbox['max'][2]:.2f} |")
+        lines.append("")
+        
+        # 楼层净高检测
+        lines.append("## 三、楼层净高检测")
+        lines.append("")
+        if '楼层净高' in self.room_dims:
+            h = self.room_dims['楼层净高']
+            status = "✅ 合格" if h['合格'] else "❌ 不合格"
+            lines.append("| 检测项 | 设计值 | 实测值 | 偏差 | 评定 |")
+            lines.append("|--------|--------|--------|------|------|")
+            lines.append(f"| 楼层净高 | {h['设计值_m']:.2f} m | {h['实测值_m']:.2f} m | {h['偏差_mm']:.1f} mm | {status} |")
+        else:
+            lines.append("> ⚠️ 未能检测到地面/天花板")
+        lines.append("")
+        
+        # 房间尺寸检测
+        lines.append("## 四、房间尺寸检测")
+        lines.append("")
+        if '房间尺寸' in self.room_dims:
+            d = self.room_dims['房间尺寸']
+            status = "✅ 合格" if d['合格'] else "❌ 不合格"
+            lines.append("| 检测项 | 设计值 | 实测值 | 偏差 | 评定 |")
+            lines.append("|--------|--------|--------|------|------|")
+            lines.append(f"| 开间 | {d['开间设计_m']:.2f} m | {d['开间实测_m']:.2f} m | {d['开间偏差_mm']:.1f} mm | {status} |")
+            lines.append(f"| 进深 | {d['进深设计_m']:.2f} m | {d['进深实测_m']:.2f} m | {d['进深偏差_mm']:.1f} mm | {status} |")
+        else:
+            lines.append("> ⚠️ 未能检测到足够墙面")
+        lines.append("")
+        
+        # 墙面质量检测
+        lines.append("## 五、墙面垂直度与平整度检测")
+        lines.append("")
+        
+        if self.wall_quality:
+            lines.append("| 墙面 | 测点数 | 垂直度(°) | 垂直度偏差 | 平整度RMSE(mm) | 垂直度评定 | 平整度评定 |")
+            lines.append("|------|--------|-----------|------------|----------------|------------|------------|")
+            
+            for wq in self.wall_quality:
+                v_status = "✅" if wq['垂直度合格'] else "❌"
+                f_status = "✅" if wq['平整度合格'] else "❌"
+                lines.append(f"| #{wq['墙面编号']} | {wq['测点数']:,} | {wq['垂直度角度_deg']:.2f}° | {wq['垂直度偏差_mm']:.1f}mm | {wq['平整度RMSE_mm']:.1f} | {v_status} | {f_status} |")
+        else:
+            lines.append("> ⚠️ 未检测到墙面数据")
+        lines.append("")
+        
+        # 总评
+        lines.append("## 六、质量总评")
+        lines.append("")
+        
+        total_checks = 0
+        pass_count = 0
+        
+        if '楼层净高' in self.room_dims:
+            total_checks += 1
+            if self.room_dims['楼层净高']['合格']:
+                pass_count += 1
+        
+        if '房间尺寸' in self.room_dims:
+            total_checks += 2
+            if self.room_dims['房间尺寸']['合格']:
+                pass_count += 2
+        
+        for wq in self.wall_quality:
+            total_checks += 2
+            if wq['垂直度合格']:
+                pass_count += 1
+            if wq['平整度合格']:
+                pass_count += 1
+        
+        pass_rate = pass_count / total_checks * 100 if total_checks > 0 else 100
+        
+        if pass_rate >= 95:
+            overall = "🏆 **优秀**"
+        elif pass_rate >= 80:
+            overall = "✅ **合格**"
+        elif pass_rate >= 60:
+            overall = "⚠️ **基本合格**"
+        else:
+            overall = "❌ **不合格**"
+        
+        lines.append(f"| 指标 | 数值 |")
+        lines.append("|------|------|")
+        lines.append(f"| 检测指标总数 | {total_checks} |")
+        lines.append(f"| 合格指标数 | {pass_count} |")
+        lines.append(f"| 合格率 | {pass_rate:.1f}% |")
+        lines.append(f"| 总体评定 | {overall} |")
+        lines.append("")
+        
+        # 检测标准参考
+        lines.append("---")
+        lines.append("")
+        lines.append("## 检测标准参考")
+        lines.append("")
+        lines.append("| 检测项 | 合格标准 |")
+        lines.append("|--------|----------|")
+        lines.append("| 楼层净高偏差 | ≤50mm |")
+        lines.append("| 房间尺寸偏差 | ≤30mm |")
+        lines.append("| 墙面垂直度 | ≤3° |")
+        lines.append("| 墙面平整度(RMSE) | ≤8mm |")
+        lines.append("")
+        
+        lines.append("---")
+        lines.append("")
+        lines.append(f"*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+        lines.append("")
+        lines.append("*检测单位: 自动化质量检测系统*")
+        
+        return '\n'.join(lines)
+    
     # ===== 辅助方法 =====
     
     def _parse_coords(self, params_str: str) -> List[float]:
