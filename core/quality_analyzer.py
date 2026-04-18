@@ -491,8 +491,12 @@ class QualityAnalyzer:
         if '楼层净高' in self.room_dims:
             h = self.room_dims['楼层净高']
             lines.append(f"设计净高: {h['设计值_m']:.2f} m")
-            lines.append(f"实测净高: {h['实测值_m']:.2f} m")
-            lines.append(f"偏差: {h['偏差_mm']:.1f} mm")
+            if h['实测值_m'] is not None:
+                lines.append(f"实测净高: {h['实测值_m']:.2f} m")
+                lines.append(f"偏差: {h['偏差_mm']:.1f} mm")
+            else:
+                lines.append(f"实测净高: 无法测量")
+                lines.append(f"备注: {h.get('备注', '点云数据不足')}")
             status = "✓ 合格" if h['合格'] else "✗ 不合格"
             lines.append(f"评定: {status}")
         else:
@@ -506,12 +510,18 @@ class QualityAnalyzer:
             d = self.room_dims['房间尺寸']
             lines.append("开间:")
             lines.append(f"  设计值: {d['开间设计_m']:.2f} m")
-            lines.append(f"  实测值: {d['开间实测_m']:.2f} m")
-            lines.append(f"  偏差: {d['开间偏差_mm']:.1f} mm")
+            if d['开间实测_m'] is not None:
+                lines.append(f"  实测值: {d['开间实测_m']:.2f} m")
+                lines.append(f"  偏差: {d['开间偏差_mm']:.1f} mm")
+            else:
+                lines.append(f"  实测值: 无法测量")
             lines.append("进深:")
             lines.append(f"  设计值: {d['进深设计_m']:.2f} m")
-            lines.append(f"  实测值: {d['进深实测_m']:.2f} m")
-            lines.append(f"  偏差: {d['进深偏差_mm']:.1f} mm")
+            if d['进深实测_m'] is not None:
+                lines.append(f"  实测值: {d['进深实测_m']:.2f} m")
+                lines.append(f"  偏差: {d['进深偏差_mm']:.1f} mm")
+            else:
+                lines.append(f"  实测值: 无法测量")
             status = "✓ 合格" if d['合格'] else "✗ 不合格"
             lines.append(f"评定: {status}")
         else:
@@ -652,8 +662,16 @@ class QualityAnalyzer:
             status = "✅ 合格" if d['合格'] else "❌ 不合格"
             lines.append("| 检测项 | 设计值 | 实测值 | 偏差 | 评定 |")
             lines.append("|--------|--------|--------|------|------|")
-            lines.append(f"| 开间 | {d['开间设计_m']:.2f} m | {d['开间实测_m']:.2f} m | {d['开间偏差_mm']:.1f} mm | {status} |")
-            lines.append(f"| 进深 | {d['进深设计_m']:.2f} m | {d['进深实测_m']:.2f} m | {d['进深偏差_mm']:.1f} mm | {status} |")
+            
+            if d['开间实测_m'] is not None:
+                lines.append(f"| 开间 | {d['开间设计_m']:.2f} m | {d['开间实测_m']:.2f} m | {d['开间偏差_mm']:.1f} mm | {status} |")
+            else:
+                lines.append(f"| 开间 | {d['开间设计_m']:.2f} m | 无法测量 | - | - |")
+            
+            if d['进深实测_m'] is not None:
+                lines.append(f"| 进深 | {d['进深设计_m']:.2f} m | {d['进深实测_m']:.2f} m | {d['进深偏差_mm']:.1f} mm | {status} |")
+            else:
+                lines.append(f"| 进深 | {d['进深设计_m']:.2f} m | 无法测量 | - | - |")
         else:
             lines.append("> ⚠️ 未能检测到足够墙面")
         lines.append("")
